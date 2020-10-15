@@ -1,0 +1,90 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Transform: AWS::Serverless-2016-10-31
+Description: >
+  amazon-codeguru-sample-lambda-function
+
+  Sample SAM Template for amazon-codeguru-sample-lambda-function
+
+# More info about Globals: https://github.com/awslabs/serverless-application-model/blob/master/docs/globals.rst
+Globals:
+  Function:
+    Timeout: 200
+
+Resources:
+  LocationsTable:
+    Type: AWS::DynamoDB::Table
+    Properties:
+      BillingMode: PAY_PER_REQUEST
+      AttributeDefinitions:
+        -
+          AttributeName: "location"
+          AttributeType: S
+        -
+          AttributeName: "date"
+          AttributeType: S
+      KeySchema:
+        - 
+          AttributeName: "location"
+          KeyType: HASH
+        - 
+          AttributeName: "date"
+          KeyType: RANGE
+
+  LambdaExecutionRole:
+    Type: AWS::IAM::Role
+    Properties:
+      AssumeRolePolicyDocument:
+        Statement:
+        - Action: ['sts:AssumeRole']
+          Effect: Allow
+          Principal:
+            Service: [lambda.amazonaws.com]
+        Version: '2012-10-17'
+      Description: "Role used for running Lambda function"
+      ManagedPolicyArns:
+        - arn:aws:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole
+      Policies:
+      - PolicyDocument:
+          Statement:
+            - Action: ['dynamodb:PutItem']
+              Effect: Allow
+              Resource:
+                Fn::GetAtt: [LocationsTable, Arn]
+          Version: '2012-10-17'
+        PolicyName: DDBWriteAccess
+      RoleName: Demo-Lambda-Execution-Role
+
+  ProfilingDemoFunction:
+    Type: AWS::Serverless::Function # More info about Function Resource: https://github.com/awslabs/serverless-application-model/blob/master/versions/2016-10-31.md#awsserverlessfunction
+    Properties:
+      CodeUri: ProfilingDemoFunction
+      Handler: com.amazon.codeguru.lambdaprofiler.demo.App::handleRequest
+      Runtime: java11
+      MemorySize: 512
+      Role:
+        Fn::GetAtt: [LambdaExecutionRole, Arn]
+      Policies:
+        - DynamoDBWritePolicy:
+            TableName: !Ref LocationsTable
+      Environment: # More info about Env Vars: https://github.com/awslabs/serverless-application-model/blob/master/versions/2016-10-31.md#environment-object
+        Variables:
+          TABLE_NAME: !Ref LocationsTable
+          AWS_CODEGURU_PROFILER_GROUP_ARN: arn:aws:codeguru-profiler:us-east-1:343584791635:profilingGroup/My-First-Lambda
+          AWS_CODEGURU_PROFILER_ENABLED: TRUE
+      Events:
+        HelloWorld:
+          Type: Api # More info about API Event Source: https://github.com/awslabs/serverless-application-model/blob/master/versions/2016-10-31.md#api
+          Properties:
+            Path: /hello
+            Method: get
+  
+Outputs:
+  ProfilingDemoFunction:
+    Description: "Lambda Function ARN"
+    Value: !GetAtt ProfilingDemoFunction.Arn
+  LambdaExecutionIAMRole:
+    Description: "IAM Role to execute Lambda function"
+    Value: !GetAtt LambdaExecutionRole.Arn
+  LocationsTableName:
+    Description: "Locations table name"
+    Value: !Ref LocationsTable
